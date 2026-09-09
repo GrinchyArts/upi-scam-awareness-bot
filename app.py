@@ -6,41 +6,33 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# =========================
+=========================
+PATHS
+=========================
 
-# PATHS
-
-# =========================
-
-BASE_DIR = os.path.dirname(os.path.abspath(**file**))
+BASE_DIR = os.path.dirname(os.path.abspath(file))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-# =========================
-
-# GEMINI
-
-# =========================
-
-# For Render, put your API key in the Environment Variables section.
-
-# Variable name: GEMINI_API_KEY
+=========================
+GEMINI
+=========================
+For Render, put your API key in the Environment Variables section.
+Variable name: GEMINI_API_KEY
 
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
 raise RuntimeError(
-  "GEMINI_API_KEY environment variable is not set."
+"GEMINI_API_KEY environment variable is not set."
 )
 
 MODEL_NAME = "gemini-3.6-flash"
 
 client = genai.Client(api_key=api_key)
 
-# =========================
-
-# SYSTEM PROMPT
-
-# =========================
+=========================
+SYSTEM PROMPT
+=========================
 
 SYSTEM_PROMPT = """
 You are UPI Safety Helper, an educational chatbot focused on
@@ -53,72 +45,72 @@ IMPORTANT PRIVACY RULES:
 
 NEVER ask the user for:
 
-* UPI PIN
-* OTP
-* ATM PIN
-* Debit card number
-* Credit card number
-* CVV
-* Card expiry date
-* Bank account number
-* Banking password
-* UPI password
-* Login credentials
-* Authentication codes
-* Full financial credentials
-* Any other secret security information
+UPI PIN
+OTP
+ATM PIN
+Debit card number
+Credit card number
+CVV
+Card expiry date
+Bank account number
+Banking password
+UPI password
+Login credentials
+Authentication codes
+Full financial credentials
+Any other secret security information
 
 The user does NOT need to provide these details for you to help them.
 
 If the user accidentally provides sensitive financial information:
 
-1. Do not repeat it.
-2. Tell them not to share it.
-3. Continue helping using only safe contextual information.
+Do not repeat it.
+Tell them not to share it.
+Continue helping using only safe contextual information.
 
 You may ask safe questions such as:
 
-* What did the person claim?
-* Did they send a QR code?
-* Did they send a link?
-* Did they ask you to approve a payment?
-* Did they claim to be customer support?
-* Did they ask you to install an app?
-* Did they show a payment screenshot?
-* Did money actually appear in the user's bank/payment app?
+What did the person claim?
+Did they send a QR code?
+Did they send a link?
+Did they ask you to approve a payment?
+Did they claim to be customer support?
+Did they ask you to install an app?
+Did they show a payment screenshot?
+Did money actually appear in the user's bank/payment app?
 
 COMMON UPI FRAUDS:
 
 Explain scams such as:
 
-* Fake payment screenshots
-* Fake customer-care numbers
-* Fake refunds
-* Fake cashback/reward links
-* QR-code scams
-* Fake investment/earning schemes
-* Remote-access scams
-* Fake parcel/delivery scams
-* Fraudulent payment requests
-* Social-engineering scams
-* Phishing links
-* Impersonation scams
+Fake payment screenshots
+Fake customer-care numbers
+Fake refunds
+Fake cashback/reward links
+QR-code scams
+Fake investment/earning schemes
+Remote-access scams
+Fake parcel/delivery scams
+Fraudulent payment requests
+Social-engineering scams
+Phishing links
+Impersonation scams
 
 UPI SAFETY BASICS:
 
-* Never share your UPI PIN or OTP.
-* A UPI PIN is used to authorize transactions.
-* Do not enter a UPI PIN simply because someone says it is
-  necessary to receive a reward, refund, prize, or money.
-* A QR code can be used in different UPI flows, so users should
-  carefully check what transaction their app is asking them to
-  authorize.
-* Never trust a payment screenshot as proof that money was received.
-* Check the actual transaction/account balance in the official
-  banking or payment application.
-* Be suspicious of people creating urgency or threatening consequences.
-* Use official customer-support channels instead of random numbers
-  found through search engines or social media.
+Never share your UPI PIN or OTP.
+A UPI PIN is used to authorize transactions.
+Do not enter a UPI PIN simply because someone says it is
+necessary to receive a reward, refund, prize, or money.
+A QR code can be used in different UPI flows, so users should
+carefully check what transaction their app is asking them to
+authorize.
+Never trust a payment screenshot as proof that money was received.
+Check the actual transaction/account balance in the official
+banking or payment application.
+Be suspicious of people creating urgency or threatening consequences.
+Use official customer-support channels instead of random numbers
+found through search engines or social media.
 
 IF THE USER HAS ALREADY BEEN SCAMMED:
 
@@ -126,15 +118,15 @@ Advise them to act quickly.
 
 They can:
 
-* Contact their bank or payment provider through its official
-  customer-support channel.
-* Report financial cyber fraud by calling India's cybercrime helpline
-  1930.
-* Report it through the National Cyber Crime Reporting Portal:
-  https://www.cybercrime.gov.in/
-* Preserve useful evidence such as screenshots, transaction
-  information, messages, phone numbers, links, and other relevant
-  details for the official investigation.
+Contact their bank or payment provider through its official
+customer-support channel.
+Report financial cyber fraud by calling India's cybercrime helpline
+1930.
+Report it through the National Cyber Crime Reporting Portal:
+https://www.cybercrime.gov.in/
+Preserve useful evidence such as screenshots, transaction
+information, messages, phone numbers, links, and other relevant
+details for the official investigation.
 
 Do not promise that money will definitely be recovered.
 
@@ -156,24 +148,22 @@ awareness and redirect the user toward that topic.
 Keep explanations clear and understandable for ordinary users.
 """
 
-# =========================
-
-# SENSITIVE INFORMATION CHECK
-
-# =========================
+=========================
+SENSITIVE INFORMATION CHECK
+=========================
 
 SENSITIVE_PATTERNS = [
-r"\b\d{4,6}\b",                         # Possible PIN / OTP
-r"\b\d{16}\b",                          # Card number
-r"\b\d{12}\b",                          # Possible account number
-r"\b\d{10}\b",                          # Possible phone number
-r"\b\d{3,4}\b",                          # CVV / short security code
-r"\b(?:otp|one[- ]time password)\b",
-r"\b(?:upi pin|upi password)\b",
-r"\b(?:cvv|cvc)\b",
-r"\b(?:atm pin|card pin)\b",
-r"\b(?:bank password|banking password)\b",
-r"\b(?:debit card|credit card)\b",
+r"\b\d{4,6}\b", # Possible PIN / OTP
+r"\b\d{16}\b", # Card number
+r"\b\d{12}\b", # Possible account number
+r"\b\d{10}\b", # Possible phone number
+r"\b\d{3,4}\b", # CVV / short security code
+r"\b(?|one[- ]time password)\b",
+r"\b(? pin|upi password)\b",
+r"\b(?|cvc)\b",
+r"\b(? pin|card pin)\b",
+r"\b(? password|banking password)\b",
+r"\b(? card|credit card)\b",
 ]
 
 def contains_sensitive_information(text):
@@ -189,7 +179,7 @@ def redact_sensitive_information(text):
 # Replace long digit sequences.
 text = re.sub(r"\b\d{10,19}\b", "[REDACTED NUMBER]", text)
 
-lace OTP/PIN-like statements.
+# Replace OTP/PIN-like statements.
 text = re.sub(
     r"(?i)\b(?:otp|one[- ]time password)\s*(?:is|:)?\s*\d{4,8}\b",
     "[REDACTED OTP]",
@@ -203,13 +193,9 @@ text = re.sub(
 )
 
 return text
-```
-
-# =========================
-
-# APP
-
-# =========================
+=========================
+APP
+=========================
 
 app = FastAPI(title="UPI Safety Helper")
 
@@ -219,11 +205,9 @@ StaticFiles(directory=STATIC_DIR),
 name="static"
 )
 
-# =========================
-
-# HEALTH CHECK
-
-# =========================
+=========================
+HEALTH CHECK
+=========================
 
 @app.get("/health")
 async def health():
@@ -232,11 +216,9 @@ return {
 "service": "UPI Safety Helper"
 }
 
-# =========================
-
-# HOME
-
-# =========================
+=========================
+HOME
+=========================
 
 @app.get("/")
 async def home():
@@ -244,16 +226,13 @@ return FileResponse(
 os.path.join(STATIC_DIR, "index.html")
 )
 
-# =========================
-
-# CHAT SESSION
-
-# =========================
+=========================
+CHAT SESSION
+=========================
 
 @app.post("/session")
 async def create_session():
 
-```
 chat = client.chats.create(
     model=MODEL_NAME,
     config={
@@ -270,20 +249,15 @@ sessions[session_id] = chat
 return JSONResponse({
     "session_id": session_id
 })
-
-# =========================
-
-# SESSION STORAGE
-
-# =========================
+=========================
+SESSION STORAGE
+=========================
 
 sessions = {}
 
-# =========================
-
-# CHAT
-
-# =========================
+=========================
+CHAT
+=========================
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -350,7 +324,6 @@ USER MESSAGE:
 {safe_message}
 """
 
-```
 else:
 
     prompt = safe_message
@@ -386,14 +359,11 @@ return StreamingResponse(
     generate(),
     media_type="text/plain"
 )
+=========================
+RUN
+=========================
 
-# =========================
-
-# RUN
-
-# =========================
-
-if **name** == "**main**":
+if name == "main":
 
 import uvicorn
 
@@ -414,8 +384,6 @@ uvicorn.run(
 }
 """
 
-# =========================
-
-# END
-
-# =========================
+=========================
+END
+=========================
