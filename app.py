@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-BASE_DIR = os.path.dirname(os.path.abspath(file))
+BASE_DIR = os.path.dirname(os.path.abspath(**file**))
 DB_FILE = os.path.join(BASE_DIR, "memory.db")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
@@ -33,23 +33,28 @@ sessions = {}
 def init_db():
 conn = sqlite3.connect(DB_FILE)
 
-conn.execute("""
+```
+conn.execute(
+    """
     CREATE TABLE IF NOT EXISTS memories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
         memory TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-""")
+    """
+)
 
 conn.commit()
 conn.close()
+```
 
 init_db()
 
 def get_memories(user_id):
 conn = sqlite3.connect(DB_FILE)
 
+```
 rows = conn.execute(
     """
     SELECT id, memory
@@ -64,10 +69,12 @@ rows = conn.execute(
 conn.close()
 
 return rows
+```
 
 def add_memory(user_id, memory):
 conn = sqlite3.connect(DB_FILE)
 
+```
 conn.execute(
     """
     INSERT INTO memories (user_id, memory)
@@ -78,10 +85,12 @@ conn.execute(
 
 conn.commit()
 conn.close()
+```
 
 def delete_memory(user_id, memory_id):
 conn = sqlite3.connect(DB_FILE)
 
+```
 conn.execute(
     """
     DELETE FROM memories
@@ -92,6 +101,7 @@ conn.execute(
 
 conn.commit()
 conn.close()
+```
 
 @app.get("/")
 async def home():
@@ -107,6 +117,7 @@ return {"status": "ok"}
 async def create_session(request: Request):
 user_id = request.cookies.get("user_id")
 
+```
 if not user_id:
     user_id = str(uuid.uuid4())
 
@@ -119,9 +130,11 @@ sessions[session_id] = {
     )
 }
 
-response = JSONResponse({
-    "session_id": session_id
-})
+response = JSONResponse(
+    {
+        "session_id": session_id
+    }
+)
 
 response.set_cookie(
     key="user_id",
@@ -132,11 +145,13 @@ response.set_cookie(
 )
 
 return response
+```
 
 @app.get("/memories")
 async def view_memories(request: Request):
 user_id = request.cookies.get("user_id")
 
+```
 if not user_id:
     return {"memories": []}
 
@@ -151,11 +166,13 @@ return {
         for memory_id, memory in memories
     ]
 }
+```
 
 @app.post("/chat")
 async def chat(request: Request):
 data = await request.json()
 
+```
 session_id = data.get("session_id")
 message = data.get("message")
 
@@ -190,9 +207,11 @@ if memory:
     add_memory(user_id, memory)
 
     return StreamingResponse(
-        iter([
-            f"Got it! I'll remember: {memory} 🧠"
-        ]),
+        iter(
+            [
+                f"Got it! I'll remember: {memory} 🧠"
+            ]
+        ),
         media_type="text/plain"
     )
 
@@ -216,16 +235,20 @@ if target:
 
     if deleted:
         return StreamingResponse(
-            iter([
-                "Okay, I'll forget that. 🗑️"
-            ]),
+            iter(
+                [
+                    "Okay, I'll forget that. 🗑️"
+                ]
+            ),
             media_type="text/plain"
         )
 
     return StreamingResponse(
-        iter([
-            "I couldn't find that memory."
-        ]),
+        iter(
+            [
+                "I couldn't find that memory."
+            ]
+        ),
         media_type="text/plain"
     )
 
@@ -238,29 +261,38 @@ if memories:
     )
 
     prompt = f"""
+```
 
 You are a helpful AI chatbot focused on UPI fraud awareness
 and digital payment safety in India.
 
+Your job is to educate users about UPI scams, fraud prevention,
+safe digital payments, and what to do after a suspected scam.
+
 Important safety rules:
 
-Never ask the user for their UPI PIN.
-Never ask for OTPs.
-Never ask for bank passwords.
-Never ask for card numbers or CVVs.
-Never ask for account passwords.
-Never ask users to share confidential financial credentials.
-If someone has lost money to fraud, advise them to contact
-their bank or payment provider and report the incident through
-the appropriate official cybercrime channels.
-Explain scams clearly and simply.
-Do not help users commit fraud or bypass payment security.
+* Never ask the user for their UPI PIN.
+* Never ask for an OTP.
+* Never ask for a bank password.
+* Never ask for a card number.
+* Never ask for a CVV.
+* Never ask for account passwords.
+* Never ask users to share confidential financial credentials.
+* Never tell users to reveal sensitive banking information in chat.
+* If someone has lost money to fraud, advise them to contact their
+  bank or payment provider and report the incident through the
+  appropriate official cybercrime reporting channels.
+* Explain scams clearly and simply.
+* Do not help users commit fraud.
+* Do not help users bypass payment security.
+* If the user asks whether something is suspicious, explain the
+  warning signs and suggest safe verification steps.
 
-These are facts the user explicitly asked you to remember:
+The user has explicitly asked you to remember these facts:
 
 {memory_text}
 
-Use these memories only when relevant.
+Use these memories only when they are relevant to the conversation.
 
 Do not mention the memory system unless the user asks about it.
 
@@ -268,46 +300,68 @@ USER MESSAGE:
 {message}
 """
 
+```
 else:
     prompt = f"""
+```
 
 You are a helpful AI chatbot focused on UPI fraud awareness
 and digital payment safety in India.
 
+Your job is to educate users about UPI scams, fraud prevention,
+safe digital payments, and what to do after a suspected scam.
+
 Important safety rules:
 
-Never ask the user for their UPI PIN.
-Never ask for OTPs.
-Never ask for bank passwords.
-Never ask for card numbers or CVVs.
-Never ask for account passwords.
-Never ask users to share confidential financial credentials.
-If someone has lost money to fraud, advise them to contact
-their bank or payment provider and report the incident through
-the appropriate official cybercrime channels.
-Explain scams clearly and simply.
-Do not help users commit fraud or bypass payment security.
+* Never ask the user for their UPI PIN.
+* Never ask for an OTP.
+* Never ask for a bank password.
+* Never ask for a card number.
+* Never ask for a CVV.
+* Never ask for account passwords.
+* Never ask users to share confidential financial credentials.
+* Never tell users to reveal sensitive banking information in chat.
+* If someone has lost money to fraud, advise them to contact their
+  bank or payment provider and report the incident through the
+  appropriate official cybercrime reporting channels.
+* Explain scams clearly and simply.
+* Do not help users commit fraud.
+* Do not help users bypass payment security.
+* If the user asks whether something is suspicious, explain the
+  warning signs and suggest safe verification steps.
 
 USER MESSAGE:
 {message}
 """
 
+```
 def generate():
-    response = gemini_chat.send_message_stream(prompt)
+    try:
+        response = gemini_chat.send_message_stream(prompt)
 
-    for chunk in response:
-        if chunk.text:
-            yield chunk.text
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+
+    except Exception as error:
+        yield f"Sorry, something went wrong: {error}"
 
 return StreamingResponse(
     generate(),
     media_type="text/plain"
 )
+```
 
-if name == "main":
+if **name** == "**main**":
 import uvicorn
 
-port = int(os.environ.get("PORT", "7860"))
+```
+port = int(
+    os.environ.get(
+        "PORT",
+        "7860"
+    )
+)
 
 uvicorn.run(
     app,
