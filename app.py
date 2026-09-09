@@ -29,7 +29,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
 raise RuntimeError(
-"GEMINI_API_KEY environment variable is not set."
+  "GEMINI_API_KEY environment variable is not set."
 )
 
 MODEL_NAME = "gemini-3.6-flash"
@@ -179,20 +179,17 @@ r"\b(?:debit card|credit card)\b",
 def contains_sensitive_information(text):
 lower = text.lower()
 
-```
 for pattern in SENSITIVE_PATTERNS:
     if re.search(pattern, lower):
         return True
 
 return False
-```
 
 def redact_sensitive_information(text):
 # Replace long digit sequences.
 text = re.sub(r"\b\d{10,19}\b", "[REDACTED NUMBER]", text)
 
-```
-# Replace OTP/PIN-like statements.
+lace OTP/PIN-like statements.
 text = re.sub(
     r"(?i)\b(?:otp|one[- ]time password)\s*(?:is|:)?\s*\d{4,8}\b",
     "[REDACTED OTP]",
@@ -273,7 +270,6 @@ sessions[session_id] = chat
 return JSONResponse({
     "session_id": session_id
 })
-```
 
 # =========================
 
@@ -292,7 +288,6 @@ sessions = {}
 @app.post("/chat")
 async def chat(request: Request):
 
-```
 data = await request.json()
 
 session_id = data.get("session_id")
@@ -339,7 +334,6 @@ gemini_chat = sessions[session_id]
 if sensitive:
 
     prompt = f"""
-```
 
 The user may have included sensitive financial/security information.
 
@@ -392,7 +386,6 @@ return StreamingResponse(
     generate(),
     media_type="text/plain"
 )
-```
 
 # =========================
 
@@ -402,7 +395,6 @@ return StreamingResponse(
 
 if **name** == "**main**":
 
-```
 import uvicorn
 
 port = int(
@@ -417,7 +409,6 @@ uvicorn.run(
     host="0.0.0.0",
     port=port
 )
-```
 
 """
 }
