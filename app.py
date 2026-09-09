@@ -16,8 +16,9 @@ MODEL_NAME = "gemini-3.6-flash"
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
+    raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
 
+client = genai.Client(api_key=api_key)
 client = genai.Client(api_key=api_key)
 
 app = FastAPI(title="UPI Safety Chatbot")
