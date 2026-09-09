@@ -1,5 +1,6 @@
 import os
-import re
+import uuid
+import sqlite3
 
 from google import genai
 from fastapi import FastAPI, Request
@@ -7,197 +8,23 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 =========================
-PATHS
+Configuration
 =========================
 
 BASE_DIR = os.path.dirname(os.path.abspath(file))
+DB_FILE = os.path.join(BASE_DIR, "memory.db")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-=========================
-GEMINI
-=========================
-For Render, put your API key in the Environment Variables section.
-Variable name: GEMINI_API_KEY
+MODEL_NAME = "gemini-3.6-flash"
 
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
-raise RuntimeError(
-"GEMINI_API_KEY environment variable is not set."
-)
-
-MODEL_NAME = "gemini-3.6-flash"
+raise RuntimeError("GEMINI_API_KEY environment variable is not set.")
 
 client = genai.Client(api_key=api_key)
 
-=========================
-SYSTEM PROMPT
-=========================
-
-SYSTEM_PROMPT = """
-You are UPI Safety Helper, an educational chatbot focused on
-UPI fraud awareness and online payment safety in India.
-
-Your purpose is to help people understand suspicious UPI situations,
-recognize common scams, and know what safe steps they can take.
-
-IMPORTANT PRIVACY RULES:
-
-NEVER ask the user for:
-
-UPI PIN
-OTP
-ATM PIN
-Debit card number
-Credit card number
-CVV
-Card expiry date
-Bank account number
-Banking password
-UPI password
-Login credentials
-Authentication codes
-Full financial credentials
-Any other secret security information
-
-The user does NOT need to provide these details for you to help them.
-
-If the user accidentally provides sensitive financial information:
-
-Do not repeat it.
-Tell them not to share it.
-Continue helping using only safe contextual information.
-
-You may ask safe questions such as:
-
-What did the person claim?
-Did they send a QR code?
-Did they send a link?
-Did they ask you to approve a payment?
-Did they claim to be customer support?
-Did they ask you to install an app?
-Did they show a payment screenshot?
-Did money actually appear in the user's bank/payment app?
-
-COMMON UPI FRAUDS:
-
-Explain scams such as:
-
-Fake payment screenshots
-Fake customer-care numbers
-Fake refunds
-Fake cashback/reward links
-QR-code scams
-Fake investment/earning schemes
-Remote-access scams
-Fake parcel/delivery scams
-Fraudulent payment requests
-Social-engineering scams
-Phishing links
-Impersonation scams
-
-UPI SAFETY BASICS:
-
-Never share your UPI PIN or OTP.
-A UPI PIN is used to authorize transactions.
-Do not enter a UPI PIN simply because someone says it is
-necessary to receive a reward, refund, prize, or money.
-A QR code can be used in different UPI flows, so users should
-carefully check what transaction their app is asking them to
-authorize.
-Never trust a payment screenshot as proof that money was received.
-Check the actual transaction/account balance in the official
-banking or payment application.
-Be suspicious of people creating urgency or threatening consequences.
-Use official customer-support channels instead of random numbers
-found through search engines or social media.
-
-IF THE USER HAS ALREADY BEEN SCAMMED:
-
-Advise them to act quickly.
-
-They can:
-
-Contact their bank or payment provider through its official
-customer-support channel.
-Report financial cyber fraud by calling India's cybercrime helpline
-1930.
-Report it through the National Cyber Crime Reporting Portal:
-https://www.cybercrime.gov.in/
-Preserve useful evidence such as screenshots, transaction
-information, messages, phone numbers, links, and other relevant
-details for the official investigation.
-
-Do not promise that money will definitely be recovered.
-
-Warn users about "recovery scammers" who may contact victims and
-demand additional money to recover their funds.
-
-IMPORTANT:
-
-You are an educational safety assistant, not a bank employee,
-police officer, lawyer, or financial institution.
-
-Do not help users commit fraud, steal money, bypass authentication,
-or defeat security systems.
-
-If a question is unrelated to UPI fraud or online payment safety,
-politely explain that your main purpose is UPI safety and fraud
-awareness and redirect the user toward that topic.
-
-Keep explanations clear and understandable for ordinary users.
-"""
-
-=========================
-SENSITIVE INFORMATION CHECK
-=========================
-
-SENSITIVE_PATTERNS = [
-r"\b\d{4,6}\b", # Possible PIN / OTP
-r"\b\d{16}\b", # Card number
-r"\b\d{12}\b", # Possible account number
-r"\b\d{10}\b", # Possible phone number
-r"\b\d{3,4}\b", # CVV / short security code
-r"\b(?|one[- ]time password)\b",
-r"\b(? pin|upi password)\b",
-r"\b(?|cvc)\b",
-r"\b(? pin|card pin)\b",
-r"\b(? password|banking password)\b",
-r"\b(? card|credit card)\b",
-]
-
-def contains_sensitive_information(text):
-lower = text.lower()
-
-for pattern in SENSITIVE_PATTERNS:
-    if re.search(pattern, lower):
-        return True
-
-return False
-
-def redact_sensitive_information(text):
-# Replace long digit sequences.
-text = re.sub(r"\b\d{10,19}\b", "[REDACTED NUMBER]", text)
-
-# Replace OTP/PIN-like statements.
-text = re.sub(
-    r"(?i)\b(?:otp|one[- ]time password)\s*(?:is|:)?\s*\d{4,8}\b",
-    "[REDACTED OTP]",
-    text,
-)
-
-text = re.sub(
-    r"(?i)\b(?:upi pin|upi password|atm pin|card pin)\s*(?:is|:)?\s*\d{4,8}\b",
-    "[REDACTED PIN]",
-    text,
-)
-
-return text
-=========================
-APP
-=========================
-
-app = FastAPI(title="UPI Safety Helper")
+app = FastAPI(title="UPI Safety Chatbot")
 
 app.mount(
 "/static",
@@ -206,18 +33,79 @@ name="static"
 )
 
 =========================
-HEALTH CHECK
+Session storage
 =========================
 
-@app.get("/health")
-async def health():
-return {
-"status": "ok",
-"service": "UPI Safety Helper"
-}
+sessions = {}
 
 =========================
-HOME
+Database
+=========================
+
+def init_db():
+conn = sqlite3.connect(DB_FILE)
+
+conn.execute("""
+    CREATE TABLE IF NOT EXISTS memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        memory TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+
+conn.commit()
+conn.close()
+
+init_db()
+
+def get_memories(user_id):
+conn = sqlite3.connect(DB_FILE)
+
+rows = conn.execute(
+    """
+    SELECT id, memory
+    FROM memories
+    WHERE user_id = ?
+    ORDER BY id DESC
+    LIMIT 50
+    """,
+    (user_id,)
+).fetchall()
+
+conn.close()
+
+return rows
+
+def add_memory(user_id, memory):
+conn = sqlite3.connect(DB_FILE)
+
+conn.execute(
+    """
+    INSERT INTO memories (user_id, memory)
+    VALUES (?, ?)
+    """,
+    (user_id, memory)
+)
+
+conn.commit()
+conn.close()
+
+def delete_memory(user_id, memory_id):
+conn = sqlite3.connect(DB_FILE)
+
+conn.execute(
+    """
+    DELETE FROM memories
+    WHERE id = ? AND user_id = ?
+    """,
+    (memory_id, user_id)
+)
+
+conn.commit()
+conn.close()
+=========================
+Routes
 =========================
 
 @app.get("/")
@@ -226,38 +114,60 @@ return FileResponse(
 os.path.join(STATIC_DIR, "index.html")
 )
 
-=========================
-CHAT SESSION
-=========================
+@app.get("/health")
+async def health():
+return {"status": "ok"}
 
 @app.post("/session")
-async def create_session():
+async def create_session(request: Request):
 
-chat = client.chats.create(
-    model=MODEL_NAME,
-    config={
-        "system_instruction": SYSTEM_PROMPT
-    }
-)
+user_id = request.cookies.get("user_id")
 
-# Store the Gemini chat object in memory.
-# This is fine for a prototype/single-instance deployment.
-session_id = os.urandom(16).hex()
+if not user_id:
+    user_id = str(uuid.uuid4())
 
-sessions[session_id] = chat
+session_id = str(uuid.uuid4())
 
-return JSONResponse({
+sessions[session_id] = {
+    "user_id": user_id,
+    "chat": client.chats.create(
+        model=MODEL_NAME
+    )
+}
+
+response = JSONResponse({
     "session_id": session_id
 })
-=========================
-SESSION STORAGE
-=========================
 
-sessions = {}
+response.set_cookie(
+    key="user_id",
+    value=user_id,
+    max_age=60 * 60 * 24 * 365 * 5,
+    httponly=True,
+    samesite="lax"
+)
 
-=========================
-CHAT
-=========================
+return response
+
+@app.get("/memories")
+async def view_memories(request: Request):
+
+user_id = request.cookies.get("user_id")
+
+if not user_id:
+    return {"memories": []}
+
+memories = get_memories(user_id)
+
+return {
+    "memories": [
+        {
+            "id": memory_id,
+            "memory": memory
+        }
+        for memory_id, memory in memories
+    ]
+}
 
 @app.post("/chat")
 async def chat(request: Request):
@@ -267,92 +177,183 @@ data = await request.json()
 session_id = data.get("session_id")
 message = data.get("message")
 
-
 if not session_id:
-    return JSONResponse(
-        {"error": "Missing session_id"},
-        status_code=400
-    )
-
+    return {"error": "Missing session_id"}
 
 if not message:
-    return JSONResponse(
-        {"error": "Missing message"},
-        status_code=400
-    )
-
+    return {"error": "Missing message"}
 
 if session_id not in sessions:
-    return JSONResponse(
-        {"error": "Session not found. Please start a new chat."},
-        status_code=404
+    return {"error": "Session not found"}
+
+session = sessions[session_id]
+
+user_id = session["user_id"]
+gemini_chat = session["chat"]
+
+lower = message.lower().strip()
+
+
+# =========================
+# Remember command
+# =========================
+
+memory = None
+
+if lower.startswith("remember that "):
+    memory = message[len("remember that "):].strip()
+
+elif lower.startswith("remember "):
+    memory = message[len("remember "):].strip()
+
+elif lower.startswith("please remember that "):
+    memory = message[len("please remember that "):].strip()
+
+
+if memory:
+
+    add_memory(user_id, memory)
+
+    return StreamingResponse(
+        iter([
+            f"Got it! I'll remember: {memory} 🧠"
+        ]),
+        media_type="text/plain"
     )
 
 
-# Limit extremely large messages.
-message = str(message)[:10000]
+# =========================
+# Forget command
+# =========================
+
+if lower.startswith("forget that "):
+    target = message[len("forget that "):].strip()
+
+elif lower.startswith("forget "):
+    target = message[len("forget "):].strip()
+
+else:
+    target = None
 
 
-sensitive = contains_sensitive_information(message)
+if target:
 
-safe_message = redact_sensitive_information(message)
+    memories = get_memories(user_id)
+
+    deleted = False
+
+    for memory_id, stored_memory in memories:
+
+        if target.lower() in stored_memory.lower():
+
+            delete_memory(
+                user_id,
+                memory_id
+            )
+
+            deleted = True
 
 
-gemini_chat = sessions[session_id]
+    if deleted:
+
+        return StreamingResponse(
+            iter([
+                "Okay, I'll forget that. 🗑️"
+            ]),
+            media_type="text/plain"
+        )
+
+
+    return StreamingResponse(
+        iter([
+            "I couldn't find that memory."
+        ]),
+        media_type="text/plain"
+    )
 
 
 # =========================
-# EXTRA SAFETY NOTICE
+# Normal Gemini chat
 # =========================
 
-if sensitive:
+memories = get_memories(user_id)
+
+
+if memories:
+
+    memory_text = "\n".join(
+        f"- {memory}"
+        for _, memory in memories
+    )
 
     prompt = f"""
 
-The user may have included sensitive financial/security information.
+You are a helpful AI chatbot focused on UPI fraud awareness
+and digital payment safety in India.
 
-Do NOT repeat any sensitive information.
+Important safety rules:
 
-Begin your response with a short warning telling the user not to
-share PINs, OTPs, card details, passwords, or other financial
-credentials.
+Never ask the user for their UPI PIN.
+Never ask for OTPs.
+Never ask for bank passwords.
+Never ask for card numbers, CVVs, or account passwords.
+Never ask users to share confidential financial credentials.
+If someone has already lost money to fraud, advise them to contact
+their bank/payment provider and report the incident through the
+appropriate official cybercrime channels.
+Explain scams clearly and simply.
+Do not help users commit fraud or bypass payment security.
 
-Then answer their actual UPI-safety question using only the safe
-information below.
+These are facts the user explicitly asked you to remember:
+
+{memory_text}
+
+Use these memories only when relevant.
+
+Do not mention the memory system unless the user asks about it.
 
 USER MESSAGE:
-{safe_message}
+{message}
 """
 
 else:
 
-    prompt = safe_message
+    prompt = f"""
 
+You are a helpful AI chatbot focused on UPI fraud awareness
+and digital payment safety in India.
+
+Important safety rules:
+
+Never ask the user for their UPI PIN.
+Never ask for OTPs.
+Never ask for bank passwords.
+Never ask for card numbers, CVVs, or account passwords.
+Never ask users to share confidential financial credentials.
+If someone has already lost money to fraud, advise them to contact
+their bank/payment provider and report the incident through the
+appropriate official cybercrime channels.
+Explain scams clearly and simply.
+Do not help users commit fraud or bypass payment security.
+
+USER MESSAGE:
+{message}
+"""
 
 # =========================
-# GEMINI STREAM
+# Stream Gemini response
 # =========================
 
 def generate():
 
-    try:
+    response = gemini_chat.send_message_stream(
+        prompt
+    )
 
-        response = gemini_chat.send_message_stream(
-            prompt
-        )
+    for chunk in response:
 
-        for chunk in response:
-
-            if chunk.text:
-                yield chunk.text
-
-    except Exception as e:
-
-        yield (
-            "Sorry, I couldn't process that request right now. "
-            "Please check that the Gemini API key and model are "
-            "configured correctly."
-        )
+        if chunk.text:
+            yield chunk.text
 
 
 return StreamingResponse(
@@ -360,7 +361,7 @@ return StreamingResponse(
     media_type="text/plain"
 )
 =========================
-RUN
+Local development
 =========================
 
 if name == "main":
@@ -379,11 +380,3 @@ uvicorn.run(
     host="0.0.0.0",
     port=port
 )
-
-"""
-}
-"""
-
-=========================
-END
-=========================
