@@ -7,10 +7,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-=========================
-Configuration
-=========================
-
 BASE_DIR = os.path.dirname(os.path.abspath(file))
 DB_FILE = os.path.join(BASE_DIR, "memory.db")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -32,15 +28,7 @@ StaticFiles(directory=STATIC_DIR),
 name="static"
 )
 
-=========================
-Session storage
-=========================
-
 sessions = {}
-
-=========================
-Database
-=========================
 
 def init_db():
 conn = sqlite3.connect(DB_FILE)
@@ -104,9 +92,6 @@ conn.execute(
 
 conn.commit()
 conn.close()
-=========================
-Routes
-=========================
 
 @app.get("/")
 async def home():
@@ -120,7 +105,6 @@ return {"status": "ok"}
 
 @app.post("/session")
 async def create_session(request: Request):
-
 user_id = request.cookies.get("user_id")
 
 if not user_id:
@@ -151,7 +135,6 @@ return response
 
 @app.get("/memories")
 async def view_memories(request: Request):
-
 user_id = request.cookies.get("user_id")
 
 if not user_id:
@@ -171,7 +154,6 @@ return {
 
 @app.post("/chat")
 async def chat(request: Request):
-
 data = await request.json()
 
 session_id = data.get("session_id")
@@ -193,11 +175,6 @@ gemini_chat = session["chat"]
 
 lower = message.lower().strip()
 
-
-# =========================
-# Remember command
-# =========================
-
 memory = None
 
 if lower.startswith("remember that "):
@@ -209,9 +186,7 @@ elif lower.startswith("remember "):
 elif lower.startswith("please remember that "):
     memory = message[len("please remember that "):].strip()
 
-
 if memory:
-
     add_memory(user_id, memory)
 
     return StreamingResponse(
@@ -220,11 +195,6 @@ if memory:
         ]),
         media_type="text/plain"
     )
-
-
-# =========================
-# Forget command
-# =========================
 
 if lower.startswith("forget that "):
     target = message[len("forget that "):].strip()
@@ -235,34 +205,22 @@ elif lower.startswith("forget "):
 else:
     target = None
 
-
 if target:
-
     memories = get_memories(user_id)
-
     deleted = False
 
     for memory_id, stored_memory in memories:
-
         if target.lower() in stored_memory.lower():
-
-            delete_memory(
-                user_id,
-                memory_id
-            )
-
+            delete_memory(user_id, memory_id)
             deleted = True
 
-
     if deleted:
-
         return StreamingResponse(
             iter([
                 "Okay, I'll forget that. 🗑️"
             ]),
             media_type="text/plain"
         )
-
 
     return StreamingResponse(
         iter([
@@ -271,16 +229,9 @@ if target:
         media_type="text/plain"
     )
 
-
-# =========================
-# Normal Gemini chat
-# =========================
-
 memories = get_memories(user_id)
 
-
 if memories:
-
     memory_text = "\n".join(
         f"- {memory}"
         for _, memory in memories
@@ -296,11 +247,12 @@ Important safety rules:
 Never ask the user for their UPI PIN.
 Never ask for OTPs.
 Never ask for bank passwords.
-Never ask for card numbers, CVVs, or account passwords.
+Never ask for card numbers or CVVs.
+Never ask for account passwords.
 Never ask users to share confidential financial credentials.
-If someone has already lost money to fraud, advise them to contact
-their bank/payment provider and report the incident through the
-appropriate official cybercrime channels.
+If someone has lost money to fraud, advise them to contact
+their bank or payment provider and report the incident through
+the appropriate official cybercrime channels.
 Explain scams clearly and simply.
 Do not help users commit fraud or bypass payment security.
 
@@ -317,7 +269,6 @@ USER MESSAGE:
 """
 
 else:
-
     prompt = f"""
 
 You are a helpful AI chatbot focused on UPI fraud awareness
@@ -328,11 +279,12 @@ Important safety rules:
 Never ask the user for their UPI PIN.
 Never ask for OTPs.
 Never ask for bank passwords.
-Never ask for card numbers, CVVs, or account passwords.
+Never ask for card numbers or CVVs.
+Never ask for account passwords.
 Never ask users to share confidential financial credentials.
-If someone has already lost money to fraud, advise them to contact
-their bank/payment provider and report the incident through the
-appropriate official cybercrime channels.
+If someone has lost money to fraud, advise them to contact
+their bank or payment provider and report the incident through
+the appropriate official cybercrime channels.
 Explain scams clearly and simply.
 Do not help users commit fraud or bypass payment security.
 
@@ -340,40 +292,22 @@ USER MESSAGE:
 {message}
 """
 
-# =========================
-# Stream Gemini response
-# =========================
-
 def generate():
-
-    response = gemini_chat.send_message_stream(
-        prompt
-    )
+    response = gemini_chat.send_message_stream(prompt)
 
     for chunk in response:
-
         if chunk.text:
             yield chunk.text
-
 
 return StreamingResponse(
     generate(),
     media_type="text/plain"
 )
-=========================
-Local development
-=========================
 
 if name == "main":
-
 import uvicorn
 
-port = int(
-    os.environ.get(
-        "PORT",
-        "7860"
-    )
-)
+port = int(os.environ.get("PORT", "7860"))
 
 uvicorn.run(
     app,
