@@ -910,6 +910,7 @@
                 <button
                     class="send"
                     id="sendButton"
+                    type="button"
                     onclick="sendMessage()"
                 >
                     ↑
@@ -940,33 +941,28 @@
     // CREATE SESSION
     // =========================
 
-    async function createSession() {
+    function createSession() {
 
-        try {
+        /*
+            The FastAPI backend gets the session ID
+            from the X-Session-ID header.
 
-            const response =
-                await fetch("/session", {
-                    method: "POST"
-                });
+            We therefore do NOT call /session.
+        */
 
+        if (
+            window.crypto &&
+            typeof window.crypto.randomUUID === "function"
+        ) {
 
-            const data =
-                await response.json();
+            sessionId =
+                window.crypto.randomUUID();
 
+        } else {
 
-            if (data.session_id) {
-
-                sessionId =
-                    data.session_id;
-
-            }
-
-        } catch (error) {
-
-            console.error(
-                "Session error:",
-                error
-            );
+            sessionId =
+                Date.now().toString(36) +
+                Math.random().toString(36).substring(2);
 
         }
 
@@ -999,7 +995,7 @@
 
         if (!sessionId) {
 
-            await createSession();
+            createSession();
 
         }
 
@@ -1039,13 +1035,13 @@
 
                         headers: {
                             "Content-Type":
-                                "application/json"
+                                "application/json",
+
+                            "X-Session-ID":
+                                sessionId
                         },
 
                         body: JSON.stringify({
-                            session_id:
-                                sessionId,
-
                             message:
                                 message
                         })
@@ -1055,8 +1051,20 @@
 
             if (!response.ok) {
 
+                const errorText =
+                    await response.text();
+
                 throw new Error(
-                    "Request failed"
+                    `HTTP ${response.status}: ${errorText}`
+                );
+
+            }
+
+
+            if (!response.body) {
+
+                throw new Error(
+                    "Server returned no response body."
                 );
 
             }
@@ -1109,6 +1117,7 @@
 
                 botText += text;
 
+
                 bubble.textContent =
                     botText;
 
@@ -1118,9 +1127,29 @@
             }
 
 
+            /*
+                Flush any remaining decoder data.
+            */
+
+            const remaining =
+                decoder.decode();
+
+
+            if (remaining) {
+
+                botText += remaining;
+
+                bubble.textContent =
+                    botText;
+
+                scrollToBottom();
+
+            }
+
         } catch (error) {
 
             console.error(
+                "Chat error:",
                 error
             );
 
@@ -1130,10 +1159,11 @@
                 "Sorry, something went wrong while connecting to the helper."
             );
 
+        } finally {
+
+            setGenerating(false);
+
         }
-
-
-        setGenerating(false);
 
     }
 
@@ -1224,7 +1254,7 @@
     // NEW CHAT
     // =========================
 
-    async function newChat() {
+    function newChat() {
 
         document.getElementById(
             "messages"
@@ -1237,7 +1267,7 @@
             "block";
 
 
-        await createSession();
+        createSession();
 
     }
 
